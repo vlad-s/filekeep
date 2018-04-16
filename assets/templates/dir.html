@@ -1,0 +1,73 @@
+{{template "header"}}
+
+<div class="container">
+    <div class="grid">
+        <div class="cell -12of12">
+            <div class="card">
+                <header class="card-header">
+                    listing
+                    <strong>{{.Files | len}} {{if eq (.Files | len) 1}}file{{else}}files{{end}}</strong>
+                {{if .FilesSize}}({{.FilesSize}}){{end}}
+                    and
+                    <strong>{{.Dirs | len}} {{if eq (.Dirs | len) 1}}directory{{else}}directories{{end}}</strong>
+                    in
+                {{range breadcrumbs .Path "/"}}<a href="{{.Path}}">{{.Name}}</a>{{if not (eq .Name "")}}/{{end}}{{end}}
+                </header>
+                <div class="card-content">
+                    <div class="inner -left">
+                        <div class="menu">
+                        {{if .Prev}}
+                            <a class="menu-item" href="{{href .Prev}}">..</a>
+                        {{end}}
+
+                        {{/* Listing the files */}}
+                        {{if .Files | len}}
+                            <div class="menu-header">files:</div>
+                        {{range .Files}}
+                            <a class="menu-item" href="{{href .Path}}">
+                            {{.Name}}
+
+                                <div class="pull-right">
+                                {{.Size}}
+                                </div>
+                            </a>
+                        {{end}}
+                        {{end}}
+
+                        {{/* Listing the directories */}}
+                        {{if .Dirs | len}}
+                            <div class="menu-header">dirs:</div>
+                        {{range .Dirs}}
+                            <a class="menu-item" href="{{href .Path}}">
+                            {{.Name}}
+
+                                <div class="pull-right">
+                                {{if .Files | len}}
+                                {{.Files | len}} {{if eq (.Files | len) 1}}file{{else}}files{{end}}
+                                    ({{.FilesSize}})
+                                {{end}}
+
+                                {{if and (.Files | len) (.Dirs | len)}}
+                                    and
+                                {{end}}
+
+                                {{if .Dirs | len}}
+                                {{.Dirs | len}} {{if eq (.Dirs | len) 1}}directory{{else}}directories{{end}}
+                                {{end}}
+
+                                {{if and (not (.Files | len)) (not (.Dirs | len))}}
+                                    no items
+                                {{end}}
+                                </div>
+                            </a>
+                        {{end}}
+                        {{end}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{template "footer"}}
