@@ -2,6 +2,8 @@
 
 SED=$(which sed)
 CUT=$(which cut)
+TR=$(which tr)
+WC=$(which wc)
 
 COMMENT="
 /*
@@ -27,6 +29,20 @@ build() {
     echo '`' >> ${FILEGO}
 }
 
+prebuild() {
+    F="$1"
+    PACKAGE=$(${CUT} -d ":" -f1 <<< "$F")
+    FILENAME=$(${CUT} -d ":" -f2 <<< "$F")
+    CONST=$(${CUT} -d ":" -f3 <<< "$F")
+    build "./assets/${PACKAGE}/${FILENAME}" "${PACKAGE}" "${CONST}"
+}
+
+if [ ! -z $1 ]
+then
+    prebuild "$1"
+    exit 0
+fi
+
 # directory:filename.ext:constName
 FILES=(
     css:hack.css:HackCSS
@@ -36,12 +52,10 @@ FILES=(
     templates:dir.html:HTMLDirList
     templates:header.html:HTMLHeader
     templates:footer.html:HTMLFooter
+    templates:about.html:HTMLAbout
 )
 
 for F in "${FILES[@]}"
 do
-    PACKAGE=$(${CUT} -d ":" -f1 <<< "$F")
-    FILENAME=$(${CUT} -d ":" -f2 <<< "$F")
-    CONST=$(${CUT} -d ":" -f3 <<< "$F")
-    build "./assets/${PACKAGE}/${FILENAME}" "${PACKAGE}" "${CONST}"
+    prebuild "$F"
 done

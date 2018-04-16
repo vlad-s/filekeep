@@ -37,6 +37,13 @@ The `Makefile` provided has rules for running the binary (`make run` - also rebu
 building the project (default, `make` or `make build`), (re)building the assets (`make assets`), and
 writing the default config to disk (`make config` - builds & invokes `filekeep -dump-config`).
 
+Building all assets can be done directly through executing `build_assets.sh` (or `make assets`), or for a single one,
+provide the parameters directly into the shell as arguments. For example:
+
+```bash
+./build_assets.sh "templates:header.html:HTMLHeader"
+```
+
 ### Deploying / Publishing
 
 Usually you'll want to listen to a local port, and proxy the trafic through your web server of choice.

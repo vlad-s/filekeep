@@ -102,8 +102,28 @@ func handleAsset(w http.ResponseWriter, _ *http.Request, path string) bool {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		fmt.Fprint(w, css.CustomCSS)
 		return true
+	case "/about":
+		aboutHandler(w)
+		return true
 	default:
 		return false
+	}
+}
+
+func aboutHandler(w http.ResponseWriter) {
+	tpls := templates.HTMLHeader + templates.HTMLFooter + templates.HTMLAbout
+	t, err := template.New("about").Parse(tpls)
+	if err != nil {
+		res := httpResponse{true, "couldn't parse template", err.Error()}
+		res.JSON(http.StatusInternalServerError, w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err = t.Execute(w, nil); err != nil {
+		res := httpResponse{true, "couldn't execute template", err.Error()}
+		res.JSON(http.StatusInternalServerError, w)
+		return
 	}
 }
 
