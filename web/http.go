@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -94,15 +95,15 @@ func listHandler(w http.ResponseWriter, n *fs.Node) {
 
 func handleAsset(w http.ResponseWriter, _ *http.Request, path string) bool {
 	switch path {
-	case "/assets/css/hack.css":
+	case string(os.PathSeparator) + filepath.Join("assets", "css", "hack.css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		fmt.Fprint(w, css.HackCSS)
 		return true
-	case "/assets/css/custom.css":
+	case string(os.PathSeparator) + filepath.Join("assets", "css", "custom.css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		fmt.Fprint(w, css.CustomCSS)
 		return true
-	case "/about":
+	case string(os.PathSeparator) + "about":
 		aboutHandler(w)
 		return true
 	default:

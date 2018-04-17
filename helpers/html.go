@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -10,8 +11,8 @@ import (
 // StripRoot will strip the root path from the config from the provided path.
 func StripRoot(path string) string {
 	root := config.Get().Root
-	if strings.HasSuffix(root, "/") {
-		root = strings.TrimRight(root, "/")
+	if strings.HasSuffix(root, string(os.PathSeparator)) {
+		root = strings.TrimRight(root, string(os.PathSeparator))
 	}
 	if root != "." {
 		return strings.TrimPrefix(path, root)
@@ -27,6 +28,9 @@ type Breadcrumb struct {
 
 // Breadcrumbs returns a slice of Breadcrumb from a string, by splitting with a separator.
 func Breadcrumbs(text, separator string) (b []Breadcrumb) {
+	if separator == "" {
+		separator = string(os.PathSeparator)
+	}
 	text = StripRoot(text)
 	b = append(b, Breadcrumb{"/", "~"})
 	split := strings.Split(text, separator)
@@ -47,6 +51,10 @@ func Href(path string) string {
 	if len(path) == 0 || path == "." {
 		return "/"
 	}
+	if path[0] == '\\' {
+		path = strings.TrimPrefix(path, `\`)
+	}
+	path = strings.Replace(path, `\`, `/`, -1)
 	if filepath.IsAbs(path) {
 		return path
 	}

@@ -11,7 +11,7 @@
                     and
                     <strong>{{.Dirs | len}} {{if eq (.Dirs | len) 1}}directory{{else}}directories{{end}}</strong>
                     in
-                {{range breadcrumbs .Path "/"}}<a href="{{.Path}}">{{.Name}}</a>{{if not (eq .Name "")}}/{{end}}{{end}}
+                {{range breadcrumbs .Path ""}}<a href="{{.Path}}">{{.Name}}</a>{{if not (eq .Name "")}}/{{end}}{{end}}
                 </header>
                 <div class="card-content">
                     <div class="inner -left">
