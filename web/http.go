@@ -110,15 +110,15 @@ func listHandler(w http.ResponseWriter, n *fs.Node) {
 
 func handleAsset(w http.ResponseWriter, path string) bool {
 	switch path {
-	case string(os.PathSeparator) + filepath.Join("assets", "css", "hack.css"):
+	case "/assets/css/hack.css", string(os.PathSeparator) + filepath.Join("assets", "css", "hack.css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		fmt.Fprint(w, css.HackCSS)
 		return true
-	case string(os.PathSeparator) + filepath.Join("assets", "css", "custom.css"):
+	case "/assets/css/custom.css", string(os.PathSeparator) + filepath.Join("assets", "css", "custom.css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		fmt.Fprint(w, css.CustomCSS)
 		return true
-	case "/favicon.ico":
+	case "/favicon.ico", string(os.PathSeparator) + "favicon.ico":
 		ico, err := base64.StdEncoding.DecodeString(images.FaviconICO)
 		if err != nil {
 			return false
@@ -126,7 +126,7 @@ func handleAsset(w http.ResponseWriter, path string) bool {
 		w.Header().Set("Content-Type", "image/x-icon; charset=binary")
 		fmt.Fprint(w, string(ico))
 		return true
-	case "/about":
+	case "/about", string(os.PathSeparator) + "about":
 		aboutHandler(w)
 		return true
 	default:
