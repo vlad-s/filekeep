@@ -1,10 +1,15 @@
 package fs
 
 import (
+	"crypto/md5"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/c2h5oh/datasize"
 	"github.com/vlad-s/filekeep/config"
@@ -31,32 +36,67 @@ func (f FileSize) String() string {
 
 // Node represents a file or a directory.
 type Node struct {
-	Name  string   `json:"name"`   // Name is the basename of the file or directory
-	Path  string   `json:"path"`   // Path is the relative path of the file or directory
-	Prev  string   `json:"prev"`   // Prev is the parent directory of the file or directory
-	IsDir bool     `json:"is_dir"` // IsDir is a flag if it's a file or directory
-	Size  FileSize `json:"size"`   // Size is the file or directory size
+	Name     string      `json:"name"`     // Name is the basename of the file or directory.
+	Path     string      `json:"path"`     // Path is the relative path of the file or directory.
+	Prev     string      `json:"prev"`     // Prev is the parent directory of the file or directory.
+	ModTime  time.Time   `json:"mod_time"` // ModTime is the modification time.
+	Mode     os.FileMode `json:"mode"`
+	IsDir    bool        `json:"is_dir"` // IsDir is a flag if it's a file or directory.
+	Size     FileSize    `json:"size"`   // Size is the file or directory size.
+	Password string      `json:"-"`      // Password is the md5 sum of the file's password.
 
 	// Files keeps all children files of a directory, or a slice of empty Nodes if it's a child directory
 	// in order to show how many children the directory has.
-	Files []*Node `json:"files"`
+	Files []*Node `json:"files,omitempty"`
 	// FilesSize represents the summed size of all children files.
-	FilesSize FileSize `json:"files_size"`
+	FilesSize FileSize `json:"files_size,omitempty"`
 	// Dirs keeps all children directories of a directory, or a slice of empty Nodes if it's a child directory
 	// ir order to show how many children the directory has.
-	Dirs []*Node `json:"dirs"`
+	Dirs []*Node `json:"dirs,omitempty"`
+}
+
+// JSON returns the node as a JSON encoded string.
+func (n *Node) JSON() string {
+	jn, err := json.MarshalIndent(n, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(jn)
+}
+
+// HasPassword returns if a node has the specified password set.
+func (n *Node) HasPassword(s string) bool {
+	sum := md5.Sum([]byte(s))
+	return n.Password == fmt.Sprintf("%x", sum)
 }
 
 func newNode(path string, info os.FileInfo) *Node {
-	return &Node{
-		Name:  filepath.Base(path),
-		Path:  path,
-		Prev:  filepath.Dir(helpers.StripRoot(path)),
-		Size:  FileSize(info.Size()),
-		IsDir: info.IsDir(),
-		Files: make([]*Node, 0),
-		Dirs:  make([]*Node, 0),
+	n := &Node{
+		Name:    filepath.Base(path),
+		Path:    helpers.StripRoot(path),
+		Prev:    filepath.Dir(helpers.StripRoot(path)),
+		ModTime: info.ModTime(),
+		Mode:    info.Mode(),
+		Size:    FileSize(info.Size()),
+		IsDir:   info.IsDir(),
+		Files:   make([]*Node, 0),
+		Dirs:    make([]*Node, 0),
 	}
+
+	if path == config.Get().Root {
+		n.Name = "."
+		n.Path = "."
+	}
+
+	passFile := filepath.Join(filepath.Dir(path), "."+filepath.Base(path))
+	pass, err := ioutil.ReadFile(passFile)
+	if err != nil {
+		return n
+	}
+
+	n.Password = strings.Trim(string(pass), "\n")
+	Log.Debugf("Read password %q for file %q", n.Password, n.Name)
+	return n
 }
 
 func lsDir(path string, info os.FileInfo, count int) (*Node, error) {

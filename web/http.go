@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/vlad-s/filekeep/assets/css"
+	"github.com/vlad-s/filekeep/assets/images"
 	"github.com/vlad-s/filekeep/assets/templates"
 	"github.com/vlad-s/filekeep/config"
 	"github.com/vlad-s/filekeep/fs"
@@ -19,8 +21,13 @@ import (
 // NewServer returns a new http.Server after setting the routes.
 func NewServer() *http.Server {
 	r := httprouter.New()
+
 	r.NotFound = http.HandlerFunc(notFoundHandler)
+	r.MethodNotAllowed = http.HandlerFunc(notFoundHandler)
+	r.PanicHandler = panicHandler
+
 	r.GET("/*path", pathHandler)
+	r.POST("/*path", pathHandler)
 
 	listen := config.Get().Listen
 	return &http.Server{
@@ -34,11 +41,12 @@ func NewServer() *http.Server {
 }
 
 type httpResponse struct {
-	Error   bool   `json:"error,omitempty"`
-	Message string `json:"message,omitempty"`
-	Raw     string `json:"raw,omitempty"`
+	Error   bool        `json:"error,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Raw     interface{} `json:"raw,omitempty"`
 }
 
+// String returns the response as a JSON encoded string.
 func (r *httpResponse) String() string {
 	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
@@ -47,10 +55,17 @@ func (r *httpResponse) String() string {
 	return string(b)
 }
 
-func (r *httpResponse) JSON(c int, w http.ResponseWriter) {
+// JSON sets the content type as application/json, writes the specified status code, and prints the response.
+func (r *httpResponse) JSON(code int, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(c)
+	w.WriteHeader(code)
 	fmt.Fprint(w, r.String())
+}
+
+func panicHandler(w http.ResponseWriter, r *http.Request, i interface{}) {
+	fs.Log.Errorf("Caught panic on %s %q: %v", r.Method, r.URL.Path, i)
+	res := httpResponse{true, "caught panic", i}
+	res.JSON(http.StatusInternalServerError, w)
 }
 
 func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
@@ -92,7 +107,7 @@ func listHandler(w http.ResponseWriter, n *fs.Node) {
 	}
 }
 
-func handleAsset(w http.ResponseWriter, _ *http.Request, path string) bool {
+func handleAsset(w http.ResponseWriter, path string) bool {
 	switch path {
 	case "/assets/css/hack.css":
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
@@ -101,6 +116,14 @@ func handleAsset(w http.ResponseWriter, _ *http.Request, path string) bool {
 	case "/assets/css/custom.css":
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		fmt.Fprint(w, css.CustomCSS)
+		return true
+	case "/favicon.ico":
+		ico, err := base64.StdEncoding.DecodeString(images.FaviconICO)
+		if err != nil {
+			return false
+		}
+		w.Header().Set("Content-Type", "image/x-icon; charset=binary")
+		fmt.Fprint(w, string(ico))
 		return true
 	case "/about":
 		aboutHandler(w)
@@ -130,7 +153,7 @@ func aboutHandler(w http.ResponseWriter) {
 func pathHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	path := filepath.Clean(ps.ByName("path"))
 
-	if handleAsset(w, r, path) {
+	if handleAsset(w, path) {
 		return
 	}
 
@@ -146,9 +169,55 @@ func pathHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
+	if !checkPass(fd, w, r) {
+		return
+	}
+
+	q := r.URL.Query()
+	if _, ok := q["json"]; ok {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		fmt.Fprint(w, fd.JSON())
+		return
+	}
+
 	if fd.IsDir {
 		listHandler(w, fd)
 	} else {
 		http.ServeFile(w, r, path)
 	}
+}
+
+func passFormHandler(n *fs.Node, w http.ResponseWriter) {
+	tpls := templates.HTMLHeader + templates.HTMLFooter + templates.HTMLPassForm
+	t, err := template.New("pass").Parse(tpls)
+	if err != nil {
+		res := httpResponse{true, "couldn't parse template", err.Error()}
+		res.JSON(http.StatusInternalServerError, w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err = t.Execute(w, n); err != nil {
+		res := httpResponse{true, "couldn't execute template", err.Error()}
+		res.JSON(http.StatusInternalServerError, w)
+		return
+	}
+}
+
+func checkPass(n *fs.Node, w http.ResponseWriter, r *http.Request) bool {
+	if n.Password == "" {
+		return true
+	}
+
+	if r.Method == "GET" {
+		passFormHandler(n, w)
+		return false
+	}
+
+	if !n.HasPassword(r.FormValue("password")) {
+		passFormHandler(n, w)
+		return false
+	}
+
+	return true
 }

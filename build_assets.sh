@@ -53,6 +53,7 @@ FILES=(
     templates:header.html:HTMLHeader
     templates:footer.html:HTMLFooter
     templates:about.html:HTMLAbout
+    templates:pass.html:HTMLPassForm
 )
 
 for F in "${FILES[@]}"

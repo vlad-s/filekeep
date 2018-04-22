@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/vlad-s/filekeep)](https://goreportcard.com/report/github.com/vlad-s/filekeep)
 [![Twitter URL](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/0x766c6164)
 
-> You own web file keeper
+> Your own web file keeper
 
 filekeep aims to be a simple, yet powerful, web file manager. It's easy to configure, and easier to use.
 It has all assets (CSS files and HTML templates) bundled into the binary, for easy and instant deployment.
@@ -97,6 +97,8 @@ What can `filekeep` do?
     * The debugging flag in the config, if set to `true`, sets the debug level to **Debug**, otherwise defaults to **Info**.
 * Breadcrumbs for easy navigation.
 * Children files and directories count, file size.
+* Password protected files - don't let everyone get everything.
+* JSON representation of the requested file or directory - just append `?json` to every URL.
 
 ## Configuration
 
@@ -128,6 +130,24 @@ filekeep -dump-config # dump the default config
 $EDITOR config.json   # edit the config using your editor
 filekeep -load-config # load the config
 ```
+
+## Password protection
+
+Currently, you can set a password for every file and directory, by creating a text file named the same as the file, but with a prepended dot, containing the MD5 sum of the password.
+For example, to protect `foobar.txt` with the password `1234`, we will need to create `.foobar.txt` in the same directory as the initial file, and write `81dc9bdb52d04dc20036dbd8313ed055` in it.
+The MD5 sum can be generated on Linux/Unix systems using the `md5` or `md5sum` binaries piped on `echo`. Or, you can use various web services, like [duckduckgo](https://ddg.gg/?q=md5+1234).
+
+For example:
+```bash
+# on Debian
+echo -n 1234 | md5sum
+81dc9bdb52d04dc20036dbd8313ed055  - 
+# on macOS
+echo -n 1234 | md5
+81dc9bdb52d04dc20036dbd8313ed055
+```
+
+The `-n` flag will make `echo` to not print the trailing newline character, otherwise entering the correct password in the web form won't allow access to the file, as MD5 sums are different.
 
 ## Contributing
 
