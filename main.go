@@ -1,54 +1,52 @@
 package main
 
 import (
+	"filekeep/config"
+	"filekeep/web"
 	"flag"
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"github.com/vlad-s/filekeep/config"
-	"github.com/vlad-s/filekeep/fs"
-	"github.com/vlad-s/filekeep/web"
 )
 
 var (
-	loadConfig = flag.Bool("load-config", false, "Load the config from disk.")
-	dumpConfig = flag.Bool("dump-config", false, "Dump the default config to disk.")
+	dumpConfig = flag.Bool("dump-config", false, "dump the default config to disk")
+	configFlag = flag.String("config", "", "path to the config file")
 )
 
-var l *logrus.Logger
-var c *config.Config
+var c = config.Get()
 
 func init() {
-	l = logrus.New()
 	flag.Parse()
 
 	if *dumpConfig {
 		if err := config.Dump(); err != nil {
-			l.Errorln(err)
+			logrus.WithError(err).Error("couldn't dump default config")
 			os.Exit(1)
 		}
 		os.Exit(0)
 	}
 
-	if *loadConfig {
-		if err := config.Load(); err != nil {
-			l.Errorln(err)
+	if *configFlag != "" {
+		var err error
+		c, err = config.Load(*configFlag)
+		if err != nil {
+			logrus.WithError(err).Error("couldn't load config")
 			os.Exit(1)
 		}
 	}
 
-	c = config.Get()
-
 	if c.Debug {
-		fs.Debug(c.Debug)
-		fs.Log.Debugln("Debugging active")
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.Debug("debugging active")
 	}
 }
 
 func main() {
-	h := web.NewServer()
-	fs.Log.Infof("Starting server on %s:%d", c.Listen.Addr, c.Listen.Port)
-	if err := h.ListenAndServe(); err != nil {
-		l.Errorln("Error during serving the web server:", err)
+	server := web.NewServer()
+	logrus.WithField("address", c.Web.String()).Info("starting server")
+	if err := server.ListenAndServe(); err != nil {
+		logrus.WithError(err).Error("error while serving the web server")
+		os.Exit(1)
 	}
 }

@@ -6,6 +6,3 @@ run: assets main.go
 
 assets: build_assets.sh
 	bash build_assets.sh
-
-config: build main.go
-	./filekeep -dump-config

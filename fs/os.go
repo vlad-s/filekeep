@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"errors"
+	"filekeep/config"
+	"filekeep/helpers"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,8 +14,7 @@ import (
 	"time"
 
 	"github.com/c2h5oh/datasize"
-	"github.com/vlad-s/filekeep/config"
-	"github.com/vlad-s/filekeep/helpers"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -95,7 +96,7 @@ func newNode(path string, info os.FileInfo) *Node {
 	}
 
 	n.Password = strings.Trim(string(pass), "\n")
-	Log.Debugf("Read password %q for file %q", n.Password, n.Name)
+	logrus.Debugf("read password %q for file %q", n.Password, n.Name)
 	return n
 }
 
@@ -109,7 +110,7 @@ func lsDir(path string, info os.FileInfo, count int) (*Node, error) {
 
 	ls, err := ioutil.ReadDir(path)
 	if err != nil {
-		Log.Debugf("Error calling ioutil.ReadDir on path %q, returning ErrDirNotFound", path)
+		logrus.Debugf("error calling ioutil.ReadDir on path %q, returning ErrDirNotFound", path)
 		return nil, ErrDirNotFound
 	}
 
@@ -117,7 +118,7 @@ func lsDir(path string, info os.FileInfo, count int) (*Node, error) {
 		filePath := filepath.Join(path, fileInfo.Name())
 
 		if config.Get().IsHidden(filePath, fileInfo.Name()) {
-			Log.Debugf("Path %q or %q is hidden, continuing lsDir loop", fileInfo.Name(), path)
+			logrus.Debugf("path %q or %q is hidden, continuing lsDir loop", fileInfo.Name(), path)
 			continue
 		}
 
@@ -140,13 +141,13 @@ func lsDir(path string, info os.FileInfo, count int) (*Node, error) {
 // Read checks if a path is hidden, and if not, will return its Node or an error if it fails.
 func Read(path string) (fd *Node, err error) {
 	if config.Get().IsHidden(path) {
-		Log.Debugf("Path %q is hidden, returning ErrFileNotFound", path)
+		logrus.Debugf("path %q is hidden, returning ErrFileNotFound", path)
 		return nil, ErrFileNotFound
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		Log.Debugf("Error calling os.Stat on path %q, returning ErrFileNotFound", path)
+		logrus.Debugf("error calling os.Stat on path %q, returning ErrFileNotFound", path)
 		return nil, ErrFileNotFound
 	}
 

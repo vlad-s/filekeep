@@ -1,21 +1,24 @@
 package web
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"filekeep/assets/css"
+	"filekeep/assets/images"
+	"filekeep/assets/templates"
+	"filekeep/config"
+	"filekeep/fs"
+	"filekeep/helpers"
 	"fmt"
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/vlad-s/filekeep/assets/css"
-	"github.com/vlad-s/filekeep/assets/images"
-	"github.com/vlad-s/filekeep/assets/templates"
-	"github.com/vlad-s/filekeep/config"
-	"github.com/vlad-s/filekeep/fs"
-	"github.com/vlad-s/filekeep/helpers"
+	"github.com/sirupsen/logrus"
 )
 
 // NewServer returns a new http.Server after setting the routes.
@@ -29,14 +32,14 @@ func NewServer() *http.Server {
 	r.GET("/*path", pathHandler)
 	r.POST("/*path", pathHandler)
 
-	listen := config.Get().Listen
+	web := config.Get().Web
 	return &http.Server{
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		Handler:           r,
-		Addr:              fmt.Sprintf("%s:%d", listen.Addr, listen.Port),
+		Addr:              web.String(),
 	}
 }
 
@@ -59,101 +62,112 @@ func (r *httpResponse) String() string {
 func (r *httpResponse) JSON(code int, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	fmt.Fprint(w, r.String())
+	if _, err := fmt.Fprint(w, r.String()); err != nil {
+		logrus.WithError(err).Error("couldn't print to response writer for json response")
+	}
+}
+
+type staticData struct {
+	CSS       template.CSS
+	DarkTheme bool
+}
+
+var headerData = staticData{
+	CSS: template.CSS(css.HackCSS + css.HackDarkCSS + css.CustomCSS),
+}
+
+var funcMap = template.FuncMap{
+	"breadcrumbs": helpers.Breadcrumbs,
+	"href":        helpers.Href,
 }
 
 func panicHandler(w http.ResponseWriter, r *http.Request, i interface{}) {
-	fs.Log.Errorf("Caught panic on %s %q: %v", r.Method, r.URL.Path, i)
+	logrus.Errorf("caught panic on %s %q: %v", r.Method, r.URL.Path, i)
 	res := httpResponse{true, "caught panic", i}
 	res.JSON(http.StatusInternalServerError, w)
 }
 
-func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
-	t, err := template.New("404").Parse(templates.HTMLHeader + templates.HTMLFooter + templates.HTML404)
-	if err != nil {
-		res := httpResponse{true, "couldn't parse template", err.Error()}
-		res.JSON(http.StatusInternalServerError, w)
-		return
+func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+	pageIncomplete := false
+	headerDataCopy := &headerData
+	buffer := bytes.NewBufferString("")
+
+	themeCookie, err := r.Cookie("dark-theme")
+	if err == nil {
+		value, err := strconv.ParseBool(themeCookie.Value)
+		if err == nil {
+			headerDataCopy.DarkTheme = value
+		}
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := headerTpl.Execute(buffer, headerDataCopy); err != nil {
+		pageIncomplete = true
+	}
+
+	if err := notFoundTpl.Execute(buffer, nil); err != nil {
+		pageIncomplete = true
+	}
+
+	if err := footerTpl.Execute(buffer, nil); err != nil {
+		pageIncomplete = true
+	}
+
 	w.WriteHeader(http.StatusNotFound)
-	if err := t.Execute(w, nil); err != nil {
-		res := httpResponse{true, "couldn't execute template", err.Error()}
+	if _, err := fmt.Fprint(w, buffer); err != nil {
+		pageIncomplete = true
+	}
+
+	if pageIncomplete {
+		res := httpResponse{Error: true, Message: "couldn't execute template"}
 		res.JSON(http.StatusInternalServerError, w)
 		return
 	}
 }
 
-func listHandler(w http.ResponseWriter, n *fs.Node) {
-	fm := template.FuncMap{
-		"breadcrumbs": helpers.Breadcrumbs,
-		"href":        helpers.Href,
-	}
-
-	tpls := templates.HTMLHeader + templates.HTMLFooter + templates.HTMLDirList
-	t, err := template.New("dir").Funcs(fm).Parse(tpls)
-	if err != nil {
-		res := httpResponse{true, "couldn't parse template", err.Error()}
-		res.JSON(http.StatusInternalServerError, w)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err = t.Execute(w, n); err != nil {
-		res := httpResponse{true, "couldn't execute template", err.Error()}
-		res.JSON(http.StatusInternalServerError, w)
-		return
-	}
-}
-
-func handleAsset(w http.ResponseWriter, path string) bool {
+func handleAsset(w http.ResponseWriter, r *http.Request, path string) bool {
 	switch path {
-	case "/assets/css/hack.css":
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		fmt.Fprint(w, css.HackCSS)
-		return true
-	case "/assets/css/custom.css":
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		fmt.Fprint(w, css.CustomCSS)
-		return true
 	case "/favicon.ico":
 		ico, err := base64.StdEncoding.DecodeString(images.FaviconICO)
 		if err != nil {
 			return false
 		}
 		w.Header().Set("Content-Type", "image/x-icon; charset=binary")
-		fmt.Fprint(w, string(ico))
+		if _, err := fmt.Fprint(w, string(ico)); err != nil {
+			return false
+		}
 		return true
 	case "/about":
-		aboutHandler(w)
+		templateHandler(w, r, aboutTpl, nil)
+		return true
+	case "/_toggleTheme":
+		var darkTheme bool
+		themeCookie, err := r.Cookie("dark-theme")
+		if err == nil {
+			darkTheme, _ = strconv.ParseBool(themeCookie.Value)
+		}
+
+		// toggle the theme
+		darkTheme = !darkTheme
+
+		cookie := &http.Cookie{
+			Name:    "dark-theme",
+			Value:   strconv.FormatBool(darkTheme),
+			Path:    "/",
+			Expires: time.Now().Add(7 * 24 * time.Hour),
+		}
+
+		http.SetCookie(w, cookie)
+		http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
 		return true
 	default:
 		return false
 	}
 }
 
-func aboutHandler(w http.ResponseWriter) {
-	tpls := templates.HTMLHeader + templates.HTMLFooter + templates.HTMLAbout
-	t, err := template.New("about").Parse(tpls)
-	if err != nil {
-		res := httpResponse{true, "couldn't parse template", err.Error()}
-		res.JSON(http.StatusInternalServerError, w)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err = t.Execute(w, nil); err != nil {
-		res := httpResponse{true, "couldn't execute template", err.Error()}
-		res.JSON(http.StatusInternalServerError, w)
-		return
-	}
-}
-
 func pathHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	path := filepath.Clean(ps.ByName("path"))
 
-	if handleAsset(w, path) {
+	if handleAsset(w, r, path) {
 		return
 	}
 
@@ -176,12 +190,14 @@ func pathHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	q := r.URL.Query()
 	if _, ok := q["json"]; ok {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		fmt.Fprint(w, fd.JSON())
+		if _, err := fmt.Fprint(w, fd.JSON()); err != nil {
+			logrus.WithError(err).Error("couldn't print to response writer for json query")
+		}
 		return
 	}
 
 	if fd.IsDir {
-		listHandler(w, fd)
+		templateHandler(w, r, dirListTpl, fd)
 	} else {
 		http.ServeFile(w, r, path)
 	}

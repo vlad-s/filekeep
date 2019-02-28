@@ -1,11 +1,10 @@
 package helpers
 
 import (
+	"filekeep/config"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/vlad-s/filekeep/config"
 )
 
 // StripRoot will strip the root path from the config from the provided path.

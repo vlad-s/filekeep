@@ -1,9 +1,8 @@
 package helpers
 
 import (
+	"filekeep/config"
 	"testing"
-
-	"github.com/vlad-s/filekeep/config"
 )
 
 func TestBreadcrumbs(t *testing.T) {

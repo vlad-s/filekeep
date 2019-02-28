@@ -1,0 +1,11 @@
+web:
+  address: localhost
+  port: 8080
+root: .
+hidden:
+- /etc/passwd
+hidden_extensions:
+- .bak
+- .DS_Store
+dotfiles: false
+debug: false
