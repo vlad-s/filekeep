@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"filekeep/assets/css"
@@ -90,15 +91,8 @@ func panicHandler(w http.ResponseWriter, r *http.Request, i interface{}) {
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	pageIncomplete := false
 	headerDataCopy := &headerData
+	headerDataCopy.DarkTheme = r.Context().Value("dark-theme").(bool)
 	buffer := bytes.NewBufferString("")
-
-	themeCookie, err := r.Cookie("dark-theme")
-	if err == nil {
-		value, err := strconv.ParseBool(themeCookie.Value)
-		if err == nil {
-			headerDataCopy.DarkTheme = value
-		}
-	}
 
 	if err := headerTpl.Execute(buffer, headerDataCopy); err != nil {
 		pageIncomplete = true
@@ -166,10 +160,18 @@ func handleAsset(w http.ResponseWriter, r *http.Request, path string) bool {
 
 func pathHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	path := filepath.Clean(ps.ByName("path"))
-
 	if handleAsset(w, r, path) {
 		return
 	}
+
+	ctx := r.Context()
+	cookie, err := r.Cookie("dark-theme")
+	if err == nil {
+		value, _ := strconv.ParseBool(cookie.Value)
+		ctx = context.WithValue(ctx, cookie.Name, value)
+	}
+
+	r = r.WithContext(ctx)
 
 	if filepath.IsAbs(path) {
 		path = path[1:]
@@ -179,7 +181,7 @@ func pathHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	fd, err := fs.Read(path)
 	if err != nil {
-		notFoundHandler(w, nil)
+		notFoundHandler(w, r)
 		return
 	}
 

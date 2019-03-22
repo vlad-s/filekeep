@@ -1,3 +1,5 @@
 /.idea/
+!config.example.yaml
+config.*.yaml
 config.yaml
 filekeep

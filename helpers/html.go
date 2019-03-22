@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"filekeep/config"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,12 +51,17 @@ func Href(path string) string {
 	if len(path) == 0 || path == "." {
 		return "/"
 	}
+
 	if path[0] == '\\' {
 		path = strings.TrimPrefix(path, `\`)
 	}
+
 	path = strings.Replace(path, `\`, `/`, -1)
+	path = url.PathEscape(path)
+
 	if filepath.IsAbs(path) {
 		return path
 	}
+
 	return "/" + path
 }

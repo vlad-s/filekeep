@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strconv"
 )
 
 var (
@@ -22,15 +21,8 @@ var (
 func templateHandler(w http.ResponseWriter, r *http.Request, t *template.Template, data interface{}) {
 	pageIncomplete := false
 	headerDataCopy := &headerData
+	headerDataCopy.DarkTheme = r.Context().Value("dark-theme").(bool)
 	buffer := bytes.NewBufferString("")
-
-	themeCookie, err := r.Cookie("dark-theme")
-	if err == nil {
-		value, err := strconv.ParseBool(themeCookie.Value)
-		if err == nil {
-			headerDataCopy.DarkTheme = value
-		}
-	}
 
 	if err := headerTpl.Execute(buffer, headerDataCopy); err != nil {
 		pageIncomplete = true
